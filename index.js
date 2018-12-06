@@ -39,8 +39,12 @@ module.exports = function (options) {
             let s = new MagicString(code);
             let ast = this.parse(code);
             
-            walk.ancestor(ast, {
-                CallExpression: (node, ancestors) => {
+            walk.fullAncestor(ast, (node, ancestors) => {
+
+                s.addSourcemapLocation(node.start);
+                s.addSourcemapLocation(node.end);
+
+                if (node.type === 'CallExpression') {
                     // Each time we find a require call, we add an import statement to the top.
                     // The closest thing in ESM we can map require to is the following:
                     //
@@ -114,9 +118,9 @@ module.exports = function (options) {
 
                         }
                     }
-                },
+                }
 
-                AssignmentExpression: (node) => {
+                if (node.type === 'AssignmentExpression') {
                     // Convert module.export calls to __exports.
                     // __exports is then exported as the default at the end.
                     // module.exports isn't necessarily on the top level and can be inside
@@ -136,6 +140,7 @@ module.exports = function (options) {
                         }
                     }
                 }
+
             });
 
             // Because we're exporting a default object, anything that calls require
@@ -198,7 +203,10 @@ module.exports = function (options) {
                 }
             }
 
-            return s.toString();
+            return {
+                code: s.toString(),
+                map: s.generateMap({ source: id })
+            };
         }
     }
 }
