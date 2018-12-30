@@ -1,5 +1,5 @@
 let path = require('path');
-let walk = require('acorn-walk');
+let estree = require('estree-walker');
 let MagicString = require('magic-string');
 let astring = require('astring');
 
@@ -25,6 +25,21 @@ function findTopLevelDeclaration (ast, name) {
     });
 }
 
+function findNodeInAst (ast, target) {
+    let found;
+
+    estree.walk(ast, {
+        enter (node) {
+            if (node === target) {
+                found = true;
+            }
+        }
+    });
+
+    return found;
+}
+
+
 module.exports = function (options) {
     return {
         transform: function (code, id) {
@@ -39,106 +54,123 @@ module.exports = function (options) {
             let s = new MagicString(code);
             let ast = this.parse(code);
             
-            walk.fullAncestor(ast, (node, ancestors) => {
+            let ancestors = [];
+            estree.walk(ast, {
+                enter: (node, parent) => {
+                    s.addSourcemapLocation(node.start);
+                    s.addSourcemapLocation(node.end);
 
-                s.addSourcemapLocation(node.start);
-                s.addSourcemapLocation(node.end);
+                    if (node.type === 'CallExpression') {
+                        // Each time we find a require call, we add an import statement to the top.
+                        // The closest thing in ESM we can map require to is the following:
+                        //
+                        //     var MyFile = require('myfile') --> import * as __temp from 'myfile';
+                        //
+                        // We use this syntax because this will make sure that we're not looking for a default property.
+                        // The require calls are then replaced with the __temp variable.
+                        //
+                        if (node.callee.name === 'require') {
+                            if (node.arguments.length === 1 && node.arguments[0].type === 'Literal') {   
 
-                if (node.type === 'CallExpression') {
-                    // Each time we find a require call, we add an import statement to the top.
-                    // The closest thing in ESM we can map require to is the following:
-                    //
-                    //     var MyFile = require('myfile') --> import * as __temp from 'myfile';
-                    //
-                    // We use this syntax because this will make sure that we're not looking for a default property.
-                    // The require calls are then replaced with the __temp variable.
-                    //
-                    if (node.callee.name === 'require') {
-                        if (node.arguments.length === 1 && node.arguments[0].type === 'Literal') {   
+                                // Before we automatically add the import statement, we need to see 
+                                // if this module should be included. This is important because of 
+                                // conditional requires that use stuff like process.env to determine
+                                // which module should be loaded.                        
+                                let shouldInclude = true;
 
-                            // Before we automatically add the import statement, we need to see 
-                            // if this module should be included. This is important because of 
-                            // conditional requires that use stuff like process.env to determine
-                            // which module should be loaded.                        
-                            let shouldInclude = true;
+                                ancestors.some((parent, index) => {
+                                    // TODO: Temporary workaround for RHL, because if has a condition
+                                    // which can't be easily statically parsed and cannot be executed.
+                                    //
+                                    // --> if (!module.hot || process.env.NODE_ENV === 'production' || !platformSupported)
+                                    // 
+                                    // Not entirely sure how to parse this.
+                                    // 
+                                    if (parent.type === 'IfStatement' && parent.test.type === 'BinaryExpression') {
+                                        shouldInclude = false;
 
-                            ancestors.some((parent, index) => {
-                                // TODO: Temporary workaround for RHL, because if has a condition
-                                // which can't be easily statically parsed and cannot be executed.
-                                //
-                                // --> if (!module.hot || process.env.NODE_ENV === 'production' || !platformSupported)
-                                // 
-                                // Not entirely sure how to parse this.
-                                // 
-                                if (parent.type === 'IfStatement' && parent.test.type === 'BinaryExpression') {
-                                    shouldInclude = false;
+                                        // This is a bit of a hack, but it works for the time being.
+                                        // We temporarily swap out the implementation of the if statement
+                                        // and execute the if statement and see which branch was activated.
+                                        let branch;
+                                        let consequent = parent.consequent;
+                                        let alternate = parent.alternate;
+                                        parent.consequent = this.parse('branch = 0');
+                                        parent.alternate = this.parse('branch = 1');
 
-                                    // This is a bit of a hack, but it works for the time being.
-                                    // We temporarily swap out the implementation of the if statement
-                                    // and execute the if statement and see which branch was activated.
-                                    let branch;
-                                    let consequent = parent.consequent;
-                                    let alternate = parent.alternate;
-                                    parent.consequent = this.parse('branch = 0');
-                                    parent.alternate = this.parse('branch = 1');
+                                        branch = eval(`
+                                            (function () {
+                                                var branch;
+                                                ${astring.generate(parent)}
+                                                return branch;
+                                            })();
+                                        `);
 
-                                    branch = eval(`
-                                        (function () {
-                                            var branch;
-                                            ${astring.generate(parent)}
-                                            return branch;
-                                        })();
-                                    `);
+                                        parent.consequent = consequent;
+                                        parent.alternate = alternate;
 
-                                    parent.consequent = consequent;
-                                    parent.alternate = alternate;
+                                        // Once we know which branch executed, we'll see if this require
+                                        // call is inside that branch. If it is, import this module, else do nothing.
+                                        let branchToCheck = branch === 0? consequent : alternate;
+                                        // let found = walk.findNodeAt(branchToCheck, node.start, node.end, (type, n) => {
+                                        //     return n === node;
+                                        // });
 
-                                    // Once we know which branch executed, we'll see if this require
-                                    // call is inside that branch. If it is, import this module, else do nothing.
-                                    let branchToCheck = branch === 0? consequent : alternate;
-                                    let found = walk.findNodeAt(branchToCheck, node.start, node.end, (type, n) => {
-                                        return n === node;
-                                    });
+                                        let found = findNodeInAst(branchToCheck, node);
 
-                                    if (found) {
-                                        shouldInclude = true;
+                                        if (found) {
+                                            shouldInclude = true;
+                                        }
+
+                                        return true;
                                     }
+                                });
 
-                                    return true;
+                                if (shouldInclude) {
+                                    let importee = node.arguments[0].value;
+                                    let tempImportName = '__require__import__' + (importIndex++);
+                                    s.overwrite(node.start, node.end, `__interopImport(${tempImportName})`);
+                                    s.prepend(`import * as ${tempImportName} from '${importee}';`);
+                                    hasImports = true;
                                 }
-                            });
 
-                            if (shouldInclude) {
-                                let importee = node.arguments[0].value;
-                                let tempImportName = '__require__import__' + (importIndex++);
-                                s.overwrite(node.start, node.end, `__interopImport(${tempImportName})`);
-                                s.prepend(`import * as ${tempImportName} from '${importee}';`);
-                                hasImports = true;
                             }
-
                         }
                     }
-                }
 
-                if (node.type === 'AssignmentExpression') {
-                    // Convert module.export calls to __exports.
-                    // __exports is then exported as the default at the end.
-                    // module.exports isn't necessarily on the top level and can be inside
-                    // branches, so that's why we use a custom object instead.
-                    let left = node.left;
-                    if (left.type === 'MemberExpression') {
-                        if (left.object && left.object.name === 'module') {
-                            if (left.property && left.property.name === 'exports') {
+                    if (node.type === 'AssignmentExpression') {
+                        // Convert module.export calls to __exports.
+                        // __exports is then exported as the default at the end.
+                        // module.exports isn't necessarily on the top level and can be inside
+                        // branches, so that's why we use a custom object instead.
+                        let left = node.left;
+                        if (left.type === 'MemberExpression') {
+                            if (left.object && left.object.name === 'module') {
+                                if (left.property && left.property.name === 'exports') {
+                                    hasExports = true;
+                                    s.overwrite(left.object.start, left.property.end, '__exports');
+                                }
+                            }
+
+                            if (left.object && left.object.name === 'exports') {
                                 hasExports = true;
-                                s.overwrite(left.object.start, left.property.end, '__exports');
+                                s.overwrite(left.object.start, left.object.end, '__exports');
                             }
                         }
-
-                        if (left.object && left.object.name === 'exports') {
-                            hasExports = true;
-                            s.overwrite(left.object.start, left.object.end, '__exports');
-                        }
                     }
+
+                    // object.define(exports) and a(export.method)
+                    if (node.type === 'Identifier' && node.name === 'exports') {
+                        if (!parent.object || parent.object === node) {
+                            s.overwrite(node.start, node.end, '__exports');
+                        } 
+                    }
+
+                    ancestors.push(node);
+                },
+
+                leave: (node, parent) => {
+                    ancestors.pop();
                 }
 
             });
