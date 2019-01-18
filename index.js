@@ -39,6 +39,29 @@ function findNodeInAst (ast, target) {
     return found;
 }
 
+function exportNames (ast, names, s) {
+    let topLevelNames = names.filter(name => findTopLevelDeclaration(ast, name));
+    let otherNames = names.filter(name => topLevelNames.indexOf(name) === -1);
+
+    // If a variable is already defined in the top level scope, it will cause
+    // a conflict to redefine it again. 
+    if (topLevelNames.length > 0) {
+        s.append(`
+            export { ${topLevelNames.join(', ')} };
+        `);
+    }
+
+    // If it's not however on the top level, but it has been exported
+    // then we need to declare a top level export for it assigning 
+    // it to the export.
+    if (otherNames.length > 0) {
+        s.append(`
+            ${otherNames.map(ex => {
+                return `export var ${ex} = __exports.${ex};`;
+            }).join(' ')}
+        `);
+    }
+}
 
 module.exports = function (options) {
     return {
@@ -48,8 +71,10 @@ module.exports = function (options) {
             }
 
             let importIndex = 0;
+            let isESModule = false;
             let hasExports = false;
             let hasImports = false;
+            let exported = [];
             
             let s = new MagicString(code);
             let ast = this.parse(code);
@@ -112,9 +137,6 @@ module.exports = function (options) {
                                         // Once we know which branch executed, we'll see if this require
                                         // call is inside that branch. If it is, import this module, else do nothing.
                                         let branchToCheck = branch === 0? consequent : alternate;
-                                        // let found = walk.findNodeAt(branchToCheck, node.start, node.end, (type, n) => {
-                                        //     return n === node;
-                                        // });
 
                                         let found = findNodeInAst(branchToCheck, node);
 
@@ -155,6 +177,10 @@ module.exports = function (options) {
                             if (left.object && left.object.name === 'exports') {
                                 hasExports = true;
                                 s.overwrite(left.object.start, left.object.end, '__exports');
+
+                                if (left.property && left.property.name) {
+                                    exported.push(left.property.name);
+                                }
                             }
                         }
                     }
@@ -164,6 +190,10 @@ module.exports = function (options) {
                         if (!parent.object || parent.object === node) {
                             s.overwrite(node.start, node.end, '__exports');
                         } 
+                    }
+
+                    if (node.type === 'Literal' && node.value === '__esModule') {
+                        isESModule = true;
                     }
 
                     ancestors.push(node);
@@ -182,18 +212,22 @@ module.exports = function (options) {
             // However, another situation can come up. What if you require an ES module?
             // If you do, it won't necessarily have a default export. Therefore as a fallback,
             // we return the full module instead of just its default. 
+            //
             if (hasImports) {
                 s.prepend(`
                     function __interopImport(ex) {
-                        if (ex.default) {
-                            return ex.default;
-                        } else {
+                        if (ex.__esModule) {
                             return ex;
                         }
+
+                        if (ex.default) {
+                            return ex.default;
+                        } 
+
+                        return ex;
                     }
                 `)
             }
-
 
             // We use default exports because it allows us to export arbitrary code.
             //
@@ -203,7 +237,15 @@ module.exports = function (options) {
             // With default exports, we don't need to know.
             if (hasExports) {
                 s.prepend('var __exports = {};');
-                s.append('export default __exports;')
+
+                if (isESModule) {
+                    s.append('export default __exports.default;');
+                    exported = exported.filter((e, i, a) => e !== 'default' && a.indexOf(e) === i);
+                    exportNames(ast, exported, s);
+                    s.append('var __esModule = true; export { __esModule };')
+                } else {
+                    s.append('export default __exports;')
+                }
 
                 // Because module.exports is dynamic and allows for arbitrary assignments, everything must 
                 // be assigned to default. But that also means named exports don't work because everything
@@ -213,26 +255,11 @@ module.exports = function (options) {
                 // what files should export what objects. We create an explicit export statement for 
                 // each one at the bottom of the file.
                 let namedExportFile = id.replace(process.cwd(), '').replace(/\\/g, '/').substring(1);
-                if (options.namedExports && options.namedExports[namedExportFile]) {
+                if (options && options.namedExports && options.namedExports[namedExportFile]) {
                     let names = options.namedExports[namedExportFile];
-
-                    let topLevelNames = names.filter(name => findTopLevelDeclaration(ast, name));
-                    let otherNames = names.filter(name => topLevelNames.indexOf(name) === -1);
-
-                    if (topLevelNames.length > 0) {
-                        s.append(`
-                            export { ${topLevelNames.join(', ')} };
-                        `);
-                    }
-
-                    if (otherNames.length > 0) {
-                        s.append(`
-                            ${otherNames.map(ex => {
-                                return `export var ${ex} = __exports.${ex};`;
-                            }).join(' ')}
-                        `);
-                    }
+                    exportNames(ast, names, s);
                 }
+
             }
 
             return {
