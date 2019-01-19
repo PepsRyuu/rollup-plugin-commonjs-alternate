@@ -70,6 +70,7 @@ module.exports = function (options) {
                 return;
             }
 
+
             let importIndex = 0;
             let isESModule = false;
             let hasExports = false;
@@ -239,12 +240,12 @@ module.exports = function (options) {
                 s.prepend('var __exports = {};');
 
                 if (isESModule) {
-                    s.append('export default __exports.default;');
+                    s.append(';export default __exports.default;');
                     exported = exported.filter((e, i, a) => e !== 'default' && a.indexOf(e) === i);
                     exportNames(ast, exported, s);
-                    s.append('var __esModule = true; export { __esModule };')
+                    s.append(';var __esModule = true; export { __esModule };')
                 } else {
-                    s.append('export default __exports;')
+                    s.append(';export default __exports;')
                 }
 
                 // Because module.exports is dynamic and allows for arbitrary assignments, everything must 
