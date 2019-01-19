@@ -220,7 +220,7 @@ module.exports = function (options) {
                             return ex;
                         }
 
-                        if (ex.default) {
+                        if (ex.default !== undefined) {
                             return ex.default;
                         } 
 
