@@ -166,6 +166,22 @@ describe('Rollup Plugin CommonJS Alternate', () => {
             expect(output.hot).to.be.undefined;
             expect(output.accept).to.be.undefined; 
         });
+
+        it ('CJS exports supports using string to access exports property', async () => {
+            let output = await generate({
+                './main.js': 'module[\'exports\'] = 123'
+            });
+
+            expect(output.default).to.equal(123);
+        });
+
+        it ('Can still export even with comment at the end', async () => {
+            let output = await generate({
+                './main.js': 'module.exports = 123; // Comment'
+            });
+
+            expect(output.default).to.equal(123);
+        });
     })
 
     describe('Importing inside CJS', () => {

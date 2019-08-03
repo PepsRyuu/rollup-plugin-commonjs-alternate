@@ -70,7 +70,6 @@ module.exports = function (options) {
                 return;
             }
 
-
             let importIndex = 0;
             let isESModule = false;
             let hasExports = false;
@@ -169,9 +168,9 @@ module.exports = function (options) {
                         let left = node.left;
                         if (left.type === 'MemberExpression') {
                             if (left.object && left.object.name === 'module') {
-                                if (left.property && left.property.name === 'exports') {
+                                if (left.property && (left.property.name === 'exports' || left.property.value === 'exports')) {
                                     hasExports = true;
-                                    s.overwrite(left.object.start, left.property.end, '__exports');
+                                    s.overwrite(left.start, left.end, '__exports');
                                 }
                             }
 
@@ -240,12 +239,12 @@ module.exports = function (options) {
                 s.prepend('var __exports = {};');
 
                 if (isESModule) {
-                    s.append(';export default __exports.default;');
+                    s.append(';\nexport default __exports.default;');
                     exported = exported.filter((e, i, a) => e !== 'default' && a.indexOf(e) === i);
                     exportNames(ast, exported, s);
-                    s.append(';var __esModule = true; export { __esModule };')
+                    s.append(';\nvar __esModule = true; export { __esModule };')
                 } else {
-                    s.append(';export default __exports;')
+                    s.append(';\nexport default __exports;')
                 }
 
                 // Because module.exports is dynamic and allows for arbitrary assignments, everything must 
