@@ -74,6 +74,7 @@ module.exports = function (options) {
             let isESModule = false;
             let hasExports = false;
             let hasImports = false;
+            let hasESDefaultExport = false; // typeof exports with default export already include, eg. lodash
             let exported = [];
             
             let s = new MagicString(code);
@@ -166,6 +167,7 @@ module.exports = function (options) {
                         // module.exports isn't necessarily on the top level and can be inside
                         // branches, so that's why we use a custom object instead.
                         let left = node.left;
+
                         if (left.type === 'MemberExpression') {
                             if (left.object && left.object.name === 'module') {
                                 if (left.property && (left.property.name === 'exports' || left.property.value === 'exports')) {
@@ -175,6 +177,7 @@ module.exports = function (options) {
                             }
 
                             if (left.object && left.object.name === 'exports') {
+
                                 hasExports = true;
                                 s.overwrite(left.object.start, left.object.end, '__exports');
 
@@ -188,12 +191,17 @@ module.exports = function (options) {
                     // object.define(exports) and a(export.method)
                     if (node.type === 'Identifier' && node.name === 'exports') {
                         if (!parent.object || parent.object === node) {
+                            hasExports = true;
                             s.overwrite(node.start, node.end, '__exports');
                         } 
                     }
 
                     if (node.type === 'Literal' && node.value === '__esModule') {
                         isESModule = true;
+                    }
+
+                    if (node.type === 'ExportDefaultDeclaration') {
+                        hasESDefaultExport = true;
                     }
 
                     ancestors.push(node);
@@ -239,12 +247,12 @@ module.exports = function (options) {
                 s.prepend('var __exports = {};');
 
                 if (isESModule) {
-                    s.append(';\nexport default __exports.default;');
+                    !hasESDefaultExport && s.append(';\nexport default __exports.default;');
                     exported = exported.filter((e, i, a) => e !== 'default' && a.indexOf(e) === i);
                     exportNames(ast, exported, s);
                     s.append(';\nvar __esModule = true; export { __esModule };')
                 } else {
-                    s.append(';\nexport default __exports;')
+                    !hasESDefaultExport && s.append(';\nexport default __exports;')
                 }
 
                 // Because module.exports is dynamic and allows for arbitrary assignments, everything must 
@@ -259,7 +267,6 @@ module.exports = function (options) {
                     let names = options.namedExports[namedExportFile];
                     exportNames(ast, names, s);
                 }
-
             }
 
             return {

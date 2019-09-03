@@ -182,6 +182,52 @@ describe('Rollup Plugin CommonJS Alternate', () => {
 
             expect(output.default).to.equal(123);
         });
+
+        it ('Supports UMD style exports', async () => {
+            let output = await generate({
+                './main.js': `
+                    (function (factory) {
+                        if (typeof exports !== 'undefined') {
+                            factory(exports);
+                        }
+                    })(function (output) {
+                        output.hello = 'world';
+                    });
+                `
+            });
+
+            expect(output.default.hello).to.equal('world');
+        });
+
+        it ('Does not export default if it is already there', async () => {
+            let output = await generate({
+                './main.js': `
+                    if (typeof exports !== 'undefined') {
+                        console.log(exports);
+                    }
+
+                    export default 123;
+                `
+            });
+
+            expect(output.default).to.equal(123);
+        });
+
+        it ('Does not export default if it is already there (__esModule)', async () => {
+            let output = await generate({
+                './main.js': `
+                    Object.defineProperty(exports, '__esModule', { get () { return true } });
+
+                    if (typeof exports !== 'undefined') {
+                        console.log(exports);
+                    }
+
+                    export default 123;
+                `
+            });
+
+            expect(output.default).to.equal(123);
+        });
     })
 
     describe('Importing inside CJS', () => {
