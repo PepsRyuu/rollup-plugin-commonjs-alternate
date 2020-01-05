@@ -247,7 +247,9 @@ module.exports = function (options) {
                 s.prepend('var __exports = {};');
 
                 if (isESModule) {
-                    !hasESDefaultExport && s.append(';\nexport default __exports.default;');
+                    if (!hasESDefaultExport && exported.filter(e => e === 'default').length > 0) {
+                        s.append(';\nexport default __exports.default;');
+                    }
                     exported = exported.filter((e, i, a) => e !== 'default' && a.indexOf(e) === i);
                     exportNames(ast, exported, s);
                     s.append(';\nvar __esModule = true; export { __esModule };')
@@ -271,7 +273,8 @@ module.exports = function (options) {
 
             return {
                 code: s.toString(),
-                map: s.generateMap({ source: id })
+                map: s.generateMap({ source: id }),
+                syntheticNamedExports: !isESModule && hasExports
             };
         }
     }

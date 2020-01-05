@@ -389,4 +389,31 @@ describe('Rollup Plugin CommonJS Alternate', () => {
             expect(output.code.indexOf('456') > -1).to.be.true;
         });
     });
+
+    describe('Synthetic Named Exports', () => {
+        it ('CJS with synthetic named exports top level - variable declaration', async () => {
+            let output = await generate({
+                './main.js': `
+                    const message = 'hello world';
+                    var MyLib = { message };
+                    module.exports = MyLib;
+                `
+            });
+
+            expect(output.message).to.equal('hello world');
+        });
+
+        it ('CJS with synthetic named exports top level - class', async () => {
+            let output = await generate({
+                './main.js': `
+                    class SomethingElse {};
+                    class Message { getMessage () { return 'hello world' } };
+                    var MyLib = { Message };
+                    module.exports = MyLib;
+                `
+            });
+
+            expect(new output.Message().getMessage()).to.equal('hello world');
+        });
+    })
 });
