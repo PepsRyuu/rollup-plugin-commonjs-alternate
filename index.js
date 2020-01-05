@@ -169,6 +169,18 @@ module.exports = function (options) {
                         let left = node.left;
 
                         if (left.type === 'MemberExpression') {
+                            // module.exports.[name] = [data]
+                            if (left.object && left.object.object && left.object.object.name === 'module' && left.object.property.name === 'exports') {
+                                hasExports = true;
+
+                                s.overwrite(left.object.object.start, left.object.property.end, '__exports');
+
+                                if (left.property && left.property.name) {
+                                    exported.push(left.property.name);
+                                }
+                            }
+
+                            // module.exports = [data]
                             if (left.object && left.object.name === 'module') {
                                 if (left.property && (left.property.name === 'exports' || left.property.value === 'exports')) {
                                     hasExports = true;
@@ -176,23 +188,20 @@ module.exports = function (options) {
                                 }
                             }
 
-                            if (left.object && left.object.name === 'exports') {
-
-                                hasExports = true;
-                                s.overwrite(left.object.start, left.object.end, '__exports');
-
+                            // exports.[name] = [data]
+                            if (left.object && left.object.name === 'exports' ) {
                                 if (left.property && left.property.name) {
+                                    hasExports = true;
                                     exported.push(left.property.name);
                                 }
                             }
                         }
                     }
 
-                    // object.define(exports) and a(export.method)
+                    // object.define(exports) and a(exports.method)
                     if (node.type === 'Identifier' && node.name === 'exports') {
                         if (!parent.object || parent.object === node) {
                             hasExports = true;
-                            s.overwrite(node.start, node.end, '__exports');
                         } 
                     }
 
@@ -244,7 +253,7 @@ module.exports = function (options) {
             // In this example, there's no way to know what to call that export. 
             // With default exports, we don't need to know.
             if (hasExports) {
-                s.prepend('var __exports = {};');
+                s.prepend('var __exports = {}; var exports = __exports;');
 
                 if (isESModule) {
                     if (!hasESDefaultExport && exported.filter(e => e === 'default').length > 0) {

@@ -415,5 +415,30 @@ describe('Rollup Plugin CommonJS Alternate', () => {
 
             expect(new output.Message().getMessage()).to.equal('hello world');
         });
+    });
+
+    describe('Miscellanous Issues', () => {
+        it ('assigning module.exports to exports', async () => {
+            let output = await generate({
+                './main.js': `
+                    "use strict";
+
+                    Object.defineProperty(exports, "__esModule", {
+                      value: true
+                    });
+                    exports.default = getMessage;
+
+
+                    function getMessage() {
+                      return 'hello world';
+                    }
+
+                    module.exports = exports.default;
+                    module.exports.default = exports.default;
+                `
+            });
+
+            expect(output.default()).to.equal('hello world');
+        })
     })
 });
