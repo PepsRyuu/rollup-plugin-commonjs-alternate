@@ -177,6 +177,10 @@ module.exports = function (options) {
 
                                 if (left.property && left.property.name) {
                                     exported.push(left.property.name);
+
+                                    if (left.property.name === '__esModule') {
+                                        isESModule = true;
+                                    }
                                 }
                             }
 
@@ -193,6 +197,10 @@ module.exports = function (options) {
                                 if (left.property && left.property.name) {
                                     hasExports = true;
                                     exported.push(left.property.name);
+
+                                    if (left.property.name === '__esModule') {
+                                        isESModule = true;
+                                    }
                                 }
                             }
                         }
@@ -261,7 +269,9 @@ module.exports = function (options) {
                     }
                     exported = exported.filter((e, i, a) => e !== 'default' && a.indexOf(e) === i);
                     exportNames(ast, exported, s);
-                    s.append(';\nvar __esModule = true; export { __esModule };')
+                    if (exported.indexOf('__esModule') === -1) {
+                        s.append(';\nvar __esModule = true; export { __esModule };');
+                    }
                 } else {
                     !hasESDefaultExport && s.append(';\nexport default __exports;')
                 }
