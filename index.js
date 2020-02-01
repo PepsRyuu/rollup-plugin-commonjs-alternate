@@ -64,9 +64,11 @@ function exportNames (ast, names, s) {
 }
 
 module.exports = function (options) {
+    let extensions = options.extensions || ['.js'];
+
     return {
         transform: function (code, id) {
-            if (path.extname(id) !== '.js') {
+            if (extensions.indexOf(path.extname(id)) === -1) {
                 return;
             }
 

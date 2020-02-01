@@ -459,6 +459,24 @@ describe('Rollup Plugin CommonJS Alternate', () => {
                 });
             });
 
+            describe ('Options: extensions', () => {
+                it ('should allow to specify additional extensions for transforming', async () => {
+                    let output = await generate({
+                        './main.js': `
+                            import dep from './dep.jsx';
+                            export default dep;
+                        `,
+                        './dep.jsx': `
+                            module.exports = 'hello';
+                        `
+                    }, {
+                        extensions: ['.js', '.jsx']
+                    }, entry.engine);
+
+                    expect(output.default).to.equal('hello');
+                });
+            });
+
             describe('Miscellanous Issues', () => {
                 it ('assigning module.exports to exports', async () => {
                     let output = await generate({

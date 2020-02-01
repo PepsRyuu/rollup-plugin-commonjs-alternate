@@ -52,3 +52,11 @@ commonjs({
     }
 })
 ```
+
+***Array&lt;String&gt;* extensions -** Specify the extensions of modules that this plugin will transform. Default ```['.js']```.
+
+```
+commonjs({
+    extensions: ['.js', '.jsx']
+})
+```
