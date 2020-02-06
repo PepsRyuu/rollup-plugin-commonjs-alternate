@@ -64,7 +64,7 @@ function exportNames (ast, names, s) {
 }
 
 module.exports = function (options) {
-    let extensions = options.extensions || ['.js'];
+    let extensions = (options && options.extensions) || ['.js'];
 
     return {
         transform: function (code, id) {
@@ -263,7 +263,7 @@ module.exports = function (options) {
             // In this example, there's no way to know what to call that export. 
             // With default exports, we don't need to know.
             if (hasExports) {
-                s.prepend('var __exports = {}; var exports = __exports;');
+                s.prepend('var __exports = {}; var exports = __exports; if (typeof module === "undefined") var module = {exports: __exports};');
 
                 if (isESModule) {
                     if (!hasESDefaultExport && exported.filter(e => e === 'default').length > 0) {

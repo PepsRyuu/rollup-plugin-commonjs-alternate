@@ -35,6 +35,7 @@ async function generateImpl (files, options, engine) {
 
 async function generate (files, options, engine) {
     let { output } = await generateImpl(files, options, engine);
+    let module = undefined; // shadow node module.exports
     return eval('(function() {' + output[0].code.replace('export default', 'return') + '})()');
 }
 
@@ -199,7 +200,9 @@ describe('Rollup Plugin CommonJS Alternate', () => {
                 it ('Does nothing with module.hot', async () => {
                     let output = await generate({
                         './main.js': `
-                            module.hot && module.hot.accept();
+                            if (module && module.hot) {
+                                module.hot.accept();
+                            }
                             module.exports = 123;
                         `
                     }, {}, entry.engine);
@@ -499,7 +502,51 @@ describe('Rollup Plugin CommonJS Alternate', () => {
                     }, {}, entry.engine);
 
                     expect(output.default()).to.equal('hello world');
-                })
+                });
+
+                it ('"typeof module !== "undefined" && module.exports" in UMD', async () => {
+                    let output = await generate({
+                        './main.js': `
+                            "use strict";
+
+                            if (typeof module !== "undefined" && module.exports) {
+                                module.exports = 123;
+                            }
+                        `
+                    }, {}, entry.engine);
+
+                    expect(output.default).to.equal(123);
+                });
+
+                it ('"typeof module !== "undefined" && module.hot" in UMD', async () => {
+                    let output = await generate({
+                        './main.js': `
+                            "use strict";
+
+                            if (typeof module !== "undefined" && module.hot) {
+                                exports.__esModule = true;
+                                exports.message = 123;
+                            }
+                        `
+                    }, {}, entry.engine);
+
+                    expect(output.message).to.not.equal(123);
+                });
+
+                it ('"typeof exports !== "undefined"" in UMD', async () => {
+                    let output = await generate({
+                        './main.js': `
+                            "use strict";
+
+                            if (typeof exports !== "undefined") {
+                                exports.__esModule = true;
+                                exports.default = 123;
+                            }
+                        `
+                    }, {}, entry.engine);
+
+                    expect(output.default).to.equal(123);
+                });
             })
         });
     });
