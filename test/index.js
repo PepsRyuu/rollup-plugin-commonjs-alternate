@@ -273,6 +273,40 @@ describe('Rollup Plugin CommonJS Alternate', () => {
 
                     expect(output.default).to.equal(123);
                 });
+
+                it ('CJS exports using Object.defineProperty', async () => {
+                    let output = await generate({
+                        './main.js': `
+                            Object.defineProperty(exports, 'message', {
+                                get () {
+                                    return 'hello world';
+                                }
+                            });
+                        `
+                    }, {}, entry.engine);
+
+                    expect(output.default.message).to.equal('hello world');
+                });
+
+                it ('CJS exports using Object.defineProperty (__esModule)', async () => {
+                    let output = await generate({
+                        './main.js': `
+                            Object.defineProperty(exports, '__esModule', {
+                                get () {
+                                    return true;
+                                }
+                            })
+
+                            Object.defineProperty(exports, 'message', {
+                                get () {
+                                    return 'hello world';
+                                }
+                            });
+                        `
+                    }, {}, entry.engine);
+
+                    expect(output.message).to.equal('hello world');
+                });
             })
 
             describe('Importing inside CJS', () => {

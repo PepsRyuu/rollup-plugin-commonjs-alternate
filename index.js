@@ -161,6 +161,20 @@ module.exports = function (options) {
 
                             }
                         }
+
+                        if (node.callee.object && 
+                            node.callee.object.name === 'Object' &&
+                            node.callee.property && 
+                            node.callee.property.name === 'defineProperty' &&
+                            node.arguments &&
+                            node.arguments[0] &&
+                            node.arguments[0].name === 'exports' &&
+                            node.arguments[1] && 
+                            node.arguments[1].type === 'Literal'
+                        ) {
+                            hasExports = true;
+                            exported.push(node.arguments[1].value);
+                        }
                     }
 
                     if (node.type === 'AssignmentExpression') {
