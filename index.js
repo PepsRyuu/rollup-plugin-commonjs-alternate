@@ -76,6 +76,7 @@ module.exports = function (options) {
             let isESModule = false;
             let hasExports = false;
             let hasImports = false;
+            let isUsingModule = false;
             let hasESDefaultExport = false; // typeof exports with default export already include, eg. lodash
             let exported = [];
             
@@ -189,8 +190,6 @@ module.exports = function (options) {
                             if (left.object && left.object.object && left.object.object.name === 'module' && left.object.property.name === 'exports') {
                                 hasExports = true;
 
-                                s.overwrite(left.object.object.start, left.object.property.end, '__exports');
-
                                 if (left.property && left.property.name) {
                                     exported.push(left.property.name);
 
@@ -204,7 +203,6 @@ module.exports = function (options) {
                             if (left.object && left.object.name === 'module') {
                                 if (left.property && (left.property.name === 'exports' || left.property.value === 'exports')) {
                                     hasExports = true;
-                                    s.overwrite(left.start, left.end, '__exports');
                                 }
                             }
 
@@ -229,6 +227,11 @@ module.exports = function (options) {
                         } 
                     }
 
+                    if (node.type === 'Identifier' && node.name === 'module') {
+                        s.overwrite(node.start, node.end, '__module'); 
+                        isUsingModule = true;
+                    }
+
                     if (node.type === 'Literal' && node.value === '__esModule') {
                         isESModule = true;
                     }
@@ -245,6 +248,13 @@ module.exports = function (options) {
                 }
 
             });
+
+            if (isUsingModule || hasExports) {
+                s.prepend(`
+                    var __exports = {}; var exports = __exports; var __module = { exports: __exports };
+                    if (typeof module !== "undefined") for (var prop in module) { prop !== "exports" && (__module[prop] = module[prop])};
+                `.trim());
+            }
 
             // Because we're exporting a default object, anything that calls require
             // needs to get that default export. We're using default export because 
@@ -277,11 +287,10 @@ module.exports = function (options) {
             // In this example, there's no way to know what to call that export. 
             // With default exports, we don't need to know.
             if (hasExports) {
-                s.prepend('var __exports = {}; var exports = __exports; if (typeof module === "undefined") var module = {exports: __exports};');
 
                 if (isESModule) {
                     if (!hasESDefaultExport && exported.filter(e => e === 'default').length > 0) {
-                        s.append(';\nexport default __exports.default;');
+                        s.append(';\nexport default __module.exports.default;');
                     }
                     exported = exported.filter((e, i, a) => e !== 'default' && a.indexOf(e) === i);
                     exportNames(ast, exported, s);
@@ -289,7 +298,7 @@ module.exports = function (options) {
                         s.append(';\nvar __esModule = true; export { __esModule };');
                     }
                 } else {
-                    !hasESDefaultExport && s.append(';\nexport default __exports;')
+                    !hasESDefaultExport && s.append(';\nexport default __module.exports;')
                 }
 
                 // Because module.exports is dynamic and allows for arbitrary assignments, everything must 

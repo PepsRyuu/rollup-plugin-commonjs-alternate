@@ -4,7 +4,7 @@ let rollup = require('rollup');
 let nollup = require('nollup');
 let path = require('path');
 
-async function generateImpl (files, options, engine) {
+async function generateImpl (files, options, engine, extra_plugins = []) {
     let resolved_files = {};
 
     for (let key in files) {
@@ -25,7 +25,8 @@ async function generateImpl (files, options, engine) {
                     return 'import * as main from \'./main.js\'; export default main;'
                 }
             },
-            commonjs(options)
+            commonjs(options),
+            ...extra_plugins
         ]
     });
 
@@ -35,7 +36,9 @@ async function generateImpl (files, options, engine) {
 
 async function generate (files, options, engine) {
     let { output } = await generateImpl(files, options, engine);
-    let module = undefined; // shadow node module.exports
+    let module = {
+        id: 1, // nollup will automatically have 1, this is for Rollup
+    }; // shadow node module.exports
     return eval('(function() {' + output[0].code.replace('export default', 'return') + '})()');
 }
 
@@ -197,7 +200,7 @@ describe('Rollup Plugin CommonJS Alternate', () => {
                     expect(output.Message()).to.equal('hello world');
                 });
 
-                it ('Does nothing with module.hot', async () => {
+                it ('Does nothing with module.hot because it should\'t exist', async () => {
                     let output = await generate({
                         './main.js': `
                             if (module && module.hot) {
@@ -538,7 +541,7 @@ describe('Rollup Plugin CommonJS Alternate', () => {
                     expect(output.default()).to.equal('hello world');
                 });
 
-                it ('"typeof module !== "undefined" && module.exports" in UMD', async () => {
+                it ('"typeof module !== "undefined" && module.exports" in UMD should pass', async () => {
                     let output = await generate({
                         './main.js': `
                             "use strict";
@@ -552,7 +555,7 @@ describe('Rollup Plugin CommonJS Alternate', () => {
                     expect(output.default).to.equal(123);
                 });
 
-                it ('"typeof module !== "undefined" && module.hot" in UMD', async () => {
+                it ('"typeof module !== "undefined" && module.hot" in UMD should not pass', async () => {
                     let output = await generate({
                         './main.js': `
                             "use strict";
@@ -567,7 +570,7 @@ describe('Rollup Plugin CommonJS Alternate', () => {
                     expect(output.message).to.not.equal(123);
                 });
 
-                it ('"typeof exports !== "undefined"" in UMD', async () => {
+                it ('"typeof exports !== "undefined"" in UMD should pass', async () => {
                     let output = await generate({
                         './main.js': `
                             "use strict";
@@ -581,8 +584,49 @@ describe('Rollup Plugin CommonJS Alternate', () => {
 
                     expect(output.default).to.equal(123);
                 });
+
+                it ('should preserve module.id', async () => {
+                    let output = await generate({
+                        './main.js': `
+                            "use strict";
+                            exports.module_id = module.id;
+                        `
+                    }, {}, entry.engine);
+
+                    expect(output.default.module_id).to.equal(1);
+                });
+
+                it ('should still ensure module is accessible without import or exports', async () => {
+                    let output = await generate({
+                        './main.js': `
+                            export default (typeof module !== 'undefined')
+                        `
+                    }, {}, entry.engine);
+
+                    expect(output.default).to.be.true;
+                });
             })
         });
     });
+
+    describe('Nollup Only', () => {
+        it ('should preserve module.hot and pass if available', async () => {
+            let { output } = await generateImpl({
+                './main.js': `
+                    "use strict";
+                    exports.module_hot = module.hot;
+                `
+            }, {}, nollup, [{
+                nollupModuleInit () {
+                    return `
+                        module.hot = true;
+                    `;
+                }
+            }]);
+
+            let result = eval('(function() {' + output[0].code.replace('export default', 'return') + '})()');
+            expect(result.default.module_hot).to.be.true;
+        });
+    })
             
 });

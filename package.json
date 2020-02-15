@@ -6,7 +6,8 @@
   "author": "Paul Sweeney",
   "license": "MIT",
   "scripts": {
-    "test:ui": "mocha-istanbul-ui \"test/*.js\" --instrument"
+    "test:ui": "mocha-istanbul-ui \"test/*.js\" --instrument",
+    "test": "mocha-istanbul-ui \"test/*.js\" --instrument --console --once"
   },
   "dependencies": {
     "astring": "^1.3.1",
