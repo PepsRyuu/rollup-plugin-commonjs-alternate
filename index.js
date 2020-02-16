@@ -57,7 +57,7 @@ function exportNames (ast, names, s) {
     if (otherNames.length > 0) {
         s.append(`
             ${otherNames.map(ex => {
-                return `export var ${ex} = __exports.${ex};`;
+                return `export var ${ex} = __module.exports.${ex};`;
             }).join(' ')}
         `);
     }

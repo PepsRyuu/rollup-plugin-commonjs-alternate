@@ -605,6 +605,36 @@ describe('Rollup Plugin CommonJS Alternate', () => {
 
                     expect(output.default).to.be.true;
                 });
+
+                it ('should allow named exports for when module.exports is overrided entirely', async () => {
+                    let output = await generate({
+                        './main.js': `
+                            "use strict";
+                            let E = function () { return 'hello' };
+                            module.exports = E;
+                            module.exports.greeting = E;
+                        `
+                    }, {
+                        namedExports: {
+                            'main.js': ['greeting']
+                        }
+                    }, entry.engine);
+
+                    expect(output.greeting()).to.equal('hello');
+                });
+
+                it ('should auto detect exports applied to functions without namedExport needed', async () => {
+                    let output = await generate({
+                        './main.js': `
+                            "use strict";
+                            let E = function () { return 'hello' };
+                            module.exports = E;
+                            module.exports.greeting = E;
+                        `
+                    }, {}, entry.engine);
+
+                    expect(output.greeting()).to.equal('hello');
+                });
             })
         });
     });
