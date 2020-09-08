@@ -60,3 +60,14 @@ commonjs({
     extensions: ['.js', '.jsx']
 })
 ```
+
+***Object&lt;String, String&gt;* define -** Specify string replacements.
+
+```
+commonjs({
+    define: {
+        'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
+        '__DEBUG__': JSON.stringify(true)
+    }
+})
+```

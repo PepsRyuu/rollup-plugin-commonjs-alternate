@@ -2,6 +2,9 @@ let path = require('path');
 let estree = require('estree-walker');
 let MagicString = require('magic-string');
 let astring = require('astring');
+let vm = require('vm');
+
+let vctx = vm.createContext();
 
 function findTopLevelDeclaration (ast, name) {
     return ast.body.some(node => {
@@ -79,6 +82,12 @@ module.exports = function (options) {
             let isUsingModule = false;
             let hasESDefaultExport = false; // typeof exports with default export already include, eg. lodash
             let exported = [];
+
+            if (options.define) {
+                Object.keys(options.define).forEach(key => {
+                    code = code.split(key).join(options.define[key]);
+                });
+            }
             
             let s = new MagicString(code);
             let ast = this.parse(code);
@@ -116,39 +125,44 @@ module.exports = function (options) {
                                     // Not entirely sure how to parse this.
                                     // 
                                     if (parent.type === 'IfStatement' && parent.test.type === 'BinaryExpression') {
-                                        shouldInclude = false;
+                                        if (parent.test.left.type === 'Literal' && parent.test.right.type === 'Literal') {
 
-                                        // This is a bit of a hack, but it works for the time being.
-                                        // We temporarily swap out the implementation of the if statement
-                                        // and execute the if statement and see which branch was activated.
-                                        let branch;
-                                        let consequent = parent.consequent;
-                                        let alternate = parent.alternate;
-                                        parent.consequent = this.parse('branch = 0');
-                                        parent.alternate = this.parse('branch = 1');
+                                            shouldInclude = false;
 
-                                        branch = eval(`
-                                            (function () {
-                                                var branch;
-                                                ${astring.generate(parent)}
-                                                return branch;
-                                            })();
-                                        `);
+                                            // This is a bit of a hack, but it works for the time being.
+                                            // We temporarily swap out the implementation of the if statement
+                                            // and execute the if statement and see which branch was activated.
+                                            let branch;
+                                            let consequent = parent.consequent;
+                                            let alternate = parent.alternate;
+                                            parent.consequent = this.parse('branch = 0');
+                                            parent.alternate = this.parse('branch = 1');
 
-                                        parent.consequent = consequent;
-                                        parent.alternate = alternate;
+                                            // Running in a VM context prevents branches from checking
+                                            // this node's process.env and other globals.
+                                            branch = vm.runInContext(`
+                                                (function () {
+                                                    var branch;
+                                                    ${astring.generate(parent)}
+                                                    return branch;
+                                                })();
+                                            `, vctx);
 
-                                        // Once we know which branch executed, we'll see if this require
-                                        // call is inside that branch. If it is, import this module, else do nothing.
-                                        let branchToCheck = branch === 0? consequent : alternate;
+                                            parent.consequent = consequent;
+                                            parent.alternate = alternate;
 
-                                        let found = findNodeInAst(branchToCheck, node);
+                                            // Once we know which branch executed, we'll see if this require
+                                            // call is inside that branch. If it is, import this module, else do nothing.
+                                            let branchToCheck = branch === 0? consequent : alternate;
 
-                                        if (found) {
-                                            shouldInclude = true;
+                                            let found = findNodeInAst(branchToCheck, node);
+
+                                            if (found) {
+                                                shouldInclude = true;
+                                            }
+
+                                            return true;
                                         }
-
-                                        return true;
                                     }
                                 });
 

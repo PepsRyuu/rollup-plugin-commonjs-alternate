@@ -470,6 +470,44 @@ describe('Rollup Plugin CommonJS Alternate', () => {
                     expect(output.code.indexOf('123') > -1).to.be.false;
                     expect(output.code.indexOf('456') > -1).to.be.true;
                 });
+
+                it ('should not rely on Nodes global variables', async () => {
+                    let output = await generateBundle({
+                        './dep1.js': `module.exports = 123`,
+                        './dep2.js': `module.exports = 456`,
+                        './main.js': `
+                            if (process.env.NODE_ENV === 'development') {
+                                module.exports = require('./dep1.js');
+                            } else {
+                                module.exports = require('./dep2.js');
+                            }
+                        `
+                    }, {}, entry.engine);
+
+                    expect(output.code.indexOf('123') > -1).to.be.true;
+                    expect(output.code.indexOf('456') > -1).to.be.true;
+                });
+
+                it ('should only include code for branches after replacing define variables', async () => {
+                    let output = await generateBundle({
+                        './dep1.js': `module.exports = 123`,
+                        './dep2.js': `module.exports = 456`,
+                        './main.js': `
+                            if (process.env.NODE_ENV === 'development') {
+                                module.exports = require('./dep1.js');
+                            } else {
+                                module.exports = require('./dep2.js');
+                            }
+                        `
+                    }, {
+                        define: {
+                            'process.env.NODE_ENV': JSON.stringify('development')
+                        }
+                    }, entry.engine);
+
+                    expect(output.code.indexOf('123') > -1).to.be.true;
+                    expect(output.code.indexOf('456') > -1).to.be.false;
+                });
             });
 
             describe('Synthetic Named Exports', () => {
@@ -514,6 +552,25 @@ describe('Rollup Plugin CommonJS Alternate', () => {
                     }, entry.engine);
 
                     expect(output.default).to.equal('hello');
+                });
+            });
+
+            describe('Options: define', () => {
+                it ('should replace all instances of definitions', async () => {
+                    let output = await generateBundle({
+                        './main.js': `
+                            console.log(process.env.NODE_ENV + process.env.NODE_ENV);
+                            console.log(__DEBUG__ + __DEBUG__);
+                        `
+                    }, {
+                        define: {
+                            'process.env.NODE_ENV': JSON.stringify("development"),
+                            '__DEBUG__': JSON.stringify(1)
+                        }
+                    }, entry.engine);
+
+                    expect(output.code.indexOf('console.log("development" + "development");') > -1).to.be.true;
+                    expect(output.code.indexOf('console.log(1 + 1);') > -1).to.be.true;                
                 });
             });
 
