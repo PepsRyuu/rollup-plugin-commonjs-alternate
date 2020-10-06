@@ -692,6 +692,16 @@ describe('Rollup Plugin CommonJS Alternate', () => {
 
                     expect(output.greeting()).to.equal('hello');
                 });
+
+                it ('should not fail on undefined options', async () => {
+                    let output = await generate({
+                        './main.js': `
+                            module.exports = 'hello';
+                        `
+                    }, undefined, entry.engine);
+
+                    expect(output.default).to.equal('hello');
+                });
             })
         });
     });

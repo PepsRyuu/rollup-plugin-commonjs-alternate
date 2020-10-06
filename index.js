@@ -66,7 +66,7 @@ function exportNames (ast, names, s) {
     }
 }
 
-module.exports = function (options) {
+module.exports = function (options = {}) {
     let extensions = (options && options.extensions) || ['.js'];
 
     return {
