@@ -189,6 +189,10 @@ module.exports = function (options = {}) {
                         ) {
                             hasExports = true;
                             exported.push(node.arguments[1].value);
+
+                            if (node.arguments[1].value === '__esModule') {
+                                isESModule = true;
+                            }
                         }
                     }
 
@@ -244,10 +248,6 @@ module.exports = function (options = {}) {
                     if (node.type === 'Identifier' && node.name === 'module') {
                         s.overwrite(node.start, node.end, '__module'); 
                         isUsingModule = true;
-                    }
-
-                    if (node.type === 'Literal' && node.value === '__esModule') {
-                        isESModule = true;
                     }
 
                     if (node.type === 'ExportDefaultDeclaration') {

@@ -39,6 +39,7 @@ async function generate (files, options, engine) {
     let module = {
         id: 1, // nollup will automatically have 1, this is for Rollup
     }; // shadow node module.exports
+
     return eval('(function() {' + output[0].code.replace('export default', 'return') + '})()');
 }
 
@@ -701,6 +702,28 @@ describe('Rollup Plugin CommonJS Alternate', () => {
                     }, undefined, entry.engine);
 
                     expect(output.default).to.equal('hello');
+                });
+
+                it ('should support webpack style loader with lazy __esModule being true', async () => {
+                    let output = await generate({
+                        './main.js': `
+                            module.exports = function () {
+                                let mod = {};
+
+                                mod.getMessage = function () {
+                                    return 'hello';
+                                }
+
+                                Object.defineProperty(mod, "__esModule", {
+                                    value: true
+                                });
+
+                                return mod;
+                            }();
+                        `
+                    }, undefined, entry.engine);
+
+                    expect(output.getMessage()).to.equal('hello');
                 });
             })
         });
