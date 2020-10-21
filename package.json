@@ -1,7 +1,7 @@
 {
   "name": "rollup-plugin-commonjs-alternate",
   "description": "Alternative CommonJS Rollup plugin.",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "main": "index.js",
   "author": "Paul Sweeney",
   "license": "MIT",
