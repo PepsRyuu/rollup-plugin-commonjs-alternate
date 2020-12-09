@@ -304,7 +304,7 @@ module.exports = function (options = {}) {
 
                 if (isESModule) {
                     if (!hasESDefaultExport && exported.filter(e => e === 'default').length > 0) {
-                        s.append(';\nexport default __module.exports.default;');
+                        s.append(';\nexport default __exports.default;');
                     }
                     exported = exported.filter((e, i, a) => e !== 'default' && a.indexOf(e) === i);
                     exportNames(ast, exported, s);

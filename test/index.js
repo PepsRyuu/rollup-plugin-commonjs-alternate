@@ -725,6 +725,42 @@ describe('Rollup Plugin CommonJS Alternate', () => {
 
                     expect(output.getMessage()).to.equal('hello');
                 });
+
+                it ('should support webpack style loader with lazy __esModule being true - scenario 2', async () => {
+                    let output = await generate({
+                        './main.js': `
+                            module.exports = function () {
+                                let mod = {};
+
+                                mod.getMessage = function () {
+                                    return 'hello';
+                                }
+
+                                Object.defineProperty(mod, "__esModule", {
+                                    value: true
+                                });
+
+                                mod.default = mod;
+
+                                return mod;
+                            }();
+                        `
+                    }, undefined, entry.engine);
+
+                    expect(output.default.getMessage()).to.equal('hello');
+                });
+
+                it ('should support assigning exports to module.exports only despite being __esModule', async () => {
+                    let output = await generate({
+                        './main.js': `
+                            exports.__esModule = true;
+                            exports.default = 123;
+                            module.exports = exports['default'];
+                        `
+                    }, undefined, entry.engine);
+
+                    expect(output.default).to.equal(123);
+                });
             })
         });
     });
