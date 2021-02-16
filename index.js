@@ -285,7 +285,7 @@ module.exports = function (options = {}) {
                             return ex;
                         }
 
-                        if (ex.default !== undefined) {
+                        if ('default' in ex) {
                             return ex.default;
                         } 
 

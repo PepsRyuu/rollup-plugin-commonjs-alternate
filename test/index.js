@@ -213,7 +213,7 @@ describe('Rollup Plugin CommonJS Alternate', () => {
 
                     expect(output.default).to.equal(123);
                     expect(output.hot).to.be.undefined;
-                    expect(output.accept).to.be.undefined; 
+                    expect(output.accept).to.be.undefined;
                 });
 
                 it ('CJS exports supports using string to access exports property', async () => {
@@ -386,6 +386,34 @@ describe('Rollup Plugin CommonJS Alternate', () => {
                     }, {}, entry.engine);
 
                     expect(output.default).to.equal(false);
+                });
+
+                it ('Import ESM with default undefined', async () => {
+                    let output = await generate({
+                        './dep.js': `
+                            export default undefined;
+                        `,
+                        './main.js': `
+                            var dep = require('./dep.js');
+                            module.exports = dep;
+                        `
+                    }, {}, entry.engine);
+
+                    expect(output.default).to.equal(undefined);
+                });
+
+                it ('Import CJS with default undefined', async () => {
+                    let output = await generate({
+                        './dep.js': `
+                            module.exports = undefined;
+                        `,
+                        './main.js': `
+                            var dep = require('./dep.js');
+                            module.exports = dep;
+                        `
+                    }, {}, entry.engine);
+
+                    expect(output.default).to.equal(undefined);
                 });
             });
 
@@ -571,7 +599,7 @@ describe('Rollup Plugin CommonJS Alternate', () => {
                     }, entry.engine);
 
                     expect(output.code.indexOf('console.log("development" + "development");') > -1).to.be.true;
-                    expect(output.code.indexOf('console.log(1 + 1);') > -1).to.be.true;                
+                    expect(output.code.indexOf('console.log(1 + 1);') > -1).to.be.true;
                 });
             });
 
@@ -784,5 +812,5 @@ describe('Rollup Plugin CommonJS Alternate', () => {
             expect(result.default.module_hot).to.be.true;
         });
     })
-            
+
 });
